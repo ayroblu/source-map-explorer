@@ -49,6 +49,9 @@ type ResolveReturn = {
 	src: string;
 };
 async function resolve(path: string, line: number, column: number): Promise<ResolveReturn> {
+	if (!path.startsWith('https:')) {
+		throw new Error('resolve: does not start with https');
+	}
 	const map = await loadMapCached(path);
 	const smc = await new sourceMap.SourceMapConsumer(map);
 	const pos = smc.originalPositionFor({ line, column });
