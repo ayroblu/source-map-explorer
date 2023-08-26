@@ -1,24 +1,8 @@
-import { error, json } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { z } from 'zod';
+import { mapSourceMapHandler } from '../../../modules/api/map-source-map/server';
 
 export const POST: RequestHandler = async ({ request }) => {
-	const { text } = await parse(request);
-	console.log('text', text);
-	return json({ text });
+	const result = await mapSourceMapHandler(request);
+	return json(result);
 };
-
-const Request = z.object({
-	text: z.string()
-});
-async function parse(request: Request) {
-	const result = Request.safeParse(await request.json());
-	if (result.success === false) {
-		throw error(400, { message: 'invalid params' });
-	}
-	return result.data;
-}
-
-// extract the inferred type
-// type User = z.infer<typeof User>;
-// { username: string }

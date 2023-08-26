@@ -1,18 +1,87 @@
-import sourceMap from 'source-map';
+import sourceMap, { type MappedPosition } from 'source-map';
 
-export async function resolve(path: string, line: number, column: number) {
+export async function convertText(
+	input: string
+): Promise<{ text: string; srcMap: Record<string, string> }> {
+	const parts = input.split(sourceRegex).map((text) => {
+		const match = sourcePartsRegex.exec(text);
+		if (!match) {
+			return text;
+		}
+		return {
+			functionName: match[1],
+			filename: match[2],
+			line: match[3],
+			column: match[4]
+		};
+	});
+	const srcMap: Record<string, string> = {};
+	const modifiedParts = await Promise.all(
+		parts.map(async (part) => {
+			if (typeof part === 'string') return part;
+			const { functionName, filename, line, column } = part;
+			const result = await safeResolve(filename, parseInt(line, 10), parseInt(column, 10));
+			if (!result.success) {
+				console.error(result.error);
+				return `${functionName}@${filename}:${line}:${column}`;
+			}
+			const { pos, src } = result.data;
+			const { line: newLine, column: newColumn, name } = pos;
+			const newFunctionName = functionName;
+			const newFilename = name ?? '';
+			if (!srcMap[newFilename]) {
+				srcMap[newFilename] = src;
+			}
+			return `${newFunctionName}@${newFilename}:${newLine}:${newColumn}`;
+		})
+	);
+	return {
+		text: modifiedParts.join(''),
+		srcMap
+	};
+}
+
+const sourceRegex = /([\S]*@[\S]+:\d+:\d+)/g;
+const sourcePartsRegex = /([\S]*)@([\S]+):(\d+):(\d+)/;
+
+type ResolveReturn = {
+	pos: MappedPosition;
+	src: string;
+};
+async function resolve(path: string, line: number, column: number): Promise<ResolveReturn> {
 	const map = await loadMapCached(path);
 	const smc = await new sourceMap.SourceMapConsumer(map);
 	const pos = smc.originalPositionFor({ line, column });
-	if (!pos.source) {
+	if (!pos.source || !pos.line || !pos.column) {
 		throw new Error('Mapping not found');
 	}
-	const name = pos.name;
+	const resultPos = {
+		source: pos.source,
+		line: pos.line,
+		column: pos.column,
+		name: pos.name ?? undefined
+	};
 	const src = smc.sourceContentFor(pos.source);
-	return { pos, name, src };
+	if (!src) {
+		throw new Error('Source not found');
+	}
+	return { pos: resultPos, src };
 }
 
-export async function safeResolve(path: string, line: number, column: number) {
+type SafeReturn<T> =
+	| {
+			success: true;
+			data: T;
+	  }
+	| {
+			success: false;
+			error: unknown;
+	  };
+async function safeResolve(
+	path: string,
+	line: number,
+	column: number
+): Promise<SafeReturn<Awaited<ReturnType<typeof resolve>>>> {
 	try {
 		return {
 			data: await resolve(path, line, column),

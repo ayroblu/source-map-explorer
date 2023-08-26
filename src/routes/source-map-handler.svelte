@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { mapSourceMapHandler } from '../modules/api/map-source-map/client';
+
 	let input = `Error: first
   clone@webpack://home/src/ReactChildren.js:23:14
   g@webpack://home/node_modules/react/src/render.js:241:24`;
@@ -9,15 +11,8 @@
 		if (!text) {
 			return;
 		}
-		const response = await fetch('/api/parse', {
-			body: JSON.stringify({ text }),
-			method: 'POST'
-		});
-		if (!response.ok) {
-			return;
-		}
-		const jsonResponse = await response.json();
-		input = jsonResponse.text;
+		const { text: newText } = await mapSourceMapHandler({ text });
+		input = newText;
 	}
 	const sourceRegex = /([\S]*@[\S]+:\d+:\d+)/g;
 	const sourcePartsRegex = /([\S]*)@([\S]+):(\d+):(\d+)/g;
