@@ -32,5 +32,9 @@
 		"vite": "^4.4.2",
 		"vitest": "^0.32.2"
 	},
-	"type": "module"
+	"type": "module",
+	"dependencies": {
+		"source-map": "^0.7.4",
+		"zod": "^3.22.2"
+	}
 }
