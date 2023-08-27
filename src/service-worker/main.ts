@@ -1,23 +1,26 @@
+/// <reference types="@sveltejs/kit" />
+/// <reference no-default-lib="true"/>
+/// <reference lib="esnext" />
 /// <reference lib="webworker" />
+import { build, files, version } from '$service-worker';
 declare const self: ServiceWorkerGlobalScope;
-import type { PrecacheEntry } from './types';
 
-const cacheName = `sw-precache-${self.registration.scope}`;
-const runtimeCacheName = `sw-runtimecache-${self.registration.scope}`;
+const cacheName = `sw-precache-${self.registration.scope}-${version}`;
 const precacheRoutes = new Set();
 const mappedRoutes = {
 	[self.registration.scope]: `${self.registration.scope}index.html`
 };
-const runtimePaths = [`${self.registration.scope}favicons`, `${self.registration.scope}assets`];
-const workboxManifest = self.__WB_MANIFEST || [];
-// console.log("manifest", workboxManifest);
+const ASSETS = [
+	...build, // the app itself
+	...files // everything in `static`
+];
 
-// MARK: install
-export function precacheManifest(event: ExtendableEvent) {
+// // MARK: install
+export function handlePrecache(event: ExtendableEvent) {
 	event.waitUntil(handlePrecacheManifest());
 }
 async function handlePrecacheManifest() {
-	const cacheablePaths = getCacheablePaths(workboxManifest);
+	const cacheablePaths = ASSETS;
 	saveRoutes(cacheablePaths);
 	const cache = await caches.open(cacheName);
 	const cachedRequests = await cache.keys();
@@ -26,13 +29,13 @@ async function handlePrecacheManifest() {
 
 	for (const path of newPaths) {
 		// console.log("new precache path", path);
-		const reqUrl = new URL(path);
+		const reqUrl = new URL(path, self.location.origin);
 		await cache.add(reqUrl);
 	}
 }
 function saveRoutes(routes: string[]) {
 	for (const route of routes) {
-		const url = new URL(route);
+		const url = new URL(route, self.location.origin);
 		const simplifiedRoute = `${url.origin}${url.pathname}`;
 		precacheRoutes.add(simplifiedRoute);
 	}
@@ -43,14 +46,14 @@ export function cleanupStaleAssets(event: ExtendableEvent) {
 	event.waitUntil(handleRemoveStaleAssets());
 }
 async function handleRemoveStaleAssets() {
-	const cacheablePathsSet = new Set(getCacheablePaths(workboxManifest));
+	const cacheablePathsSet = new Set(ASSETS);
 	const cache = await caches.open(cacheName);
 	const cachedRequests = await cache.keys();
 	const staleRequests = cachedRequests.filter((req) => !cacheablePathsSet.has(req.url));
 	await Promise.all(staleRequests.map((req) => cache.delete(req)));
 }
 
-// MARK: fetch
+// // MARK: fetch
 export function proxyFetch(event: FetchEvent) {
 	const url = new URL(event.request.url);
 	const route = `${url.origin}${url.pathname}`;
@@ -58,55 +61,20 @@ export function proxyFetch(event: FetchEvent) {
 		event.respondWith(handlePrefetch(event));
 	} else if (mappedRoutes[route]) {
 		event.respondWith(handlePrefetch(event, mappedRoutes[route]));
-	} else if (runtimePaths.some((path) => route.startsWith(path))) {
-		event.respondWith(handleRuntimeFetch(event));
 	} else {
-		// console.log("unhandled route", route);
+		console.log('unhandled route', route);
 	}
 }
 async function handlePrefetch(event: FetchEvent, url: string = event.request.url) {
 	const cache = await caches.open(cacheName);
 	const match = await cache.match(url, { ignoreSearch: true });
 	if (match) {
-		return addCorpHeaders(match);
+		return match;
 	}
-	const res = await fetch(event.request.clone());
-	return addCorpHeaders(res);
-}
-function addCorpHeaders(response: Response) {
-	const headers = new Headers(response.headers);
-	headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
-	headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-
-	return new Response(response.body, {
-		headers,
-		status: response.status,
-		statusText: response.statusText
-	});
-}
-async function handleRuntimeFetch(event: FetchEvent) {
-	const cache = await caches.open(runtimeCacheName);
-	// CacheFirst
-	const match = await cache.match(event.request, { ignoreSearch: true });
-	if (match) {
-		return addCorpHeaders(match);
+	// const res = await fetch(event.request.clone());
+	const res = await fetch(event.request);
+	if (res.ok) {
+		await cache.put(url, res.clone());
 	}
-	const response = await fetch(event.request);
-	if (response.ok) {
-		cache.put(event.request, response.clone());
-	}
-	return addCorpHeaders(response);
-}
-
-// MARK: utils
-function getCacheablePaths(workboxManifest: (PrecacheEntry | string)[]): string[] {
-	const manifestEntries = workboxManifest as PrecacheEntry[];
-	const cacheableUrls = manifestEntries.map(({ revision, url }) => {
-		const reqUrl = new URL(self.registration.scope + url);
-		if (revision) {
-			reqUrl.searchParams.append('__WB_REVISION__', revision);
-		}
-		return reqUrl.href;
-	});
-	return cacheableUrls;
+	return res;
 }
