@@ -1,38 +1,28 @@
 import sourceMap, { type MappedPosition } from 'source-map';
+import { fetchSimpleJson, fetchSimpleText, setupCache } from './utils';
 
 export async function convertText(
 	input: string
 ): Promise<{ text: string; srcMap: Record<string, string> }> {
-	const parts = input.split(sourceRegex).map((text) => {
-		const match = sourcePartsRegex.exec(text);
-		if (!match) {
-			return text;
-		}
-		return {
-			functionName: match[1],
-			filename: match[2],
-			line: match[3],
-			column: match[4]
-		};
-	});
+	const parts = getTraceParts(input);
 	const srcMap: Record<string, string> = {};
 	const modifiedParts = await Promise.all(
 		parts.map(async (part) => {
 			if (typeof part === 'string') return part;
-			const { functionName, filename, line, column } = part;
+			const { filename, line, column } = part;
 			const result = await safeResolve(filename, parseInt(line, 10), parseInt(column, 10));
 			if (!result.success) {
-				console.error(result.error);
-				return `${functionName}@${filename}:${line}:${column}`;
+				console.error('failed to resolve', filename, line, column, result.error);
+				return `${filename}:${line}:${column}`;
 			}
 			const { pos, src } = result.data;
-			const { line: newLine, column: newColumn, name } = pos;
-			const newFunctionName = functionName;
-			const newFilename = name ?? '';
-			if (!srcMap[newFilename]) {
-				srcMap[newFilename] = src;
+			const { line: newLine, column: newColumn, source } = pos;
+			const newFilename = source;
+			const newTrace = `${newFilename}:${newLine}:${newColumn}`;
+			if (!srcMap[newTrace]) {
+				srcMap[newTrace] = src;
 			}
-			return `${newFunctionName}@${newFilename}:${newLine}:${newColumn}`;
+			return newTrace;
 		})
 	);
 	return {
@@ -41,8 +31,27 @@ export async function convertText(
 	};
 }
 
-const sourceRegex = /([\S]*@[\S]+:\d+:\d+)/g;
-const sourcePartsRegex = /([\S]*)@([\S]+):(\d+):(\d+)/;
+export type StackTracePath = {
+	filename: string;
+	line: string;
+	column: string;
+};
+export function getTraceParts(input: string): (string | StackTracePath)[] {
+	return input.split(sourceRegex).map((text) => {
+		const match = sourcePartsRegex.exec(text);
+		if (!match) {
+			return text;
+		}
+		return {
+			filename: match[1],
+			line: match[2],
+			column: match[3]
+		};
+	});
+}
+
+const sourceRegex = /([\w]+:\/\/[\S]+:\d+:\d+)/g;
+const sourcePartsRegex = /([\S]+):(\d+):(\d+)/;
 
 type ResolveReturn = {
 	pos: MappedPosition;
@@ -50,25 +59,27 @@ type ResolveReturn = {
 };
 async function resolve(path: string, line: number, column: number): Promise<ResolveReturn> {
 	if (!path.startsWith('https:')) {
-		throw new Error('resolve: does not start with https');
+		throw new Error(`resolve: "${path}" does not start with https`);
 	}
 	const map = await loadMapCached(path);
-	const smc = await new sourceMap.SourceMapConsumer(map);
-	const pos = smc.originalPositionFor({ line, column });
-	if (!pos.source || !pos.line || !pos.column) {
-		throw new Error('Mapping not found');
-	}
-	const resultPos = {
-		source: pos.source,
-		line: pos.line,
-		column: pos.column,
-		name: pos.name ?? undefined
-	};
-	const src = smc.sourceContentFor(pos.source);
-	if (!src) {
-		throw new Error('Source not found');
-	}
-	return { pos: resultPos, src };
+	return sourceMap.SourceMapConsumer.with(map, null, (smc) => {
+		const pos = smc.originalPositionFor({ line, column });
+		if (!pos.source || !pos.line || !pos.column) {
+			throw new Error('Mapping not found');
+		}
+		const resultPos = {
+			source: pos.source,
+			line: pos.line,
+			column: pos.column,
+			name: pos.name ?? undefined
+		};
+		const sourceContent = smc.sourceContentFor(pos.source);
+		if (!sourceContent) {
+			throw new Error('Source not found');
+		}
+		const src = slice(sourceContent, pos.line, pos.column, { context: 20 });
+		return { pos: resultPos, src };
+	});
 }
 
 type SafeReturn<T> =
@@ -98,7 +109,6 @@ async function safeResolve(
 	}
 }
 
-const cache = new Map();
 async function loadMap(path: string) {
 	const js = await fetchSimpleText(path);
 	if (js.startsWith('{')) {
@@ -114,33 +124,29 @@ async function loadMap(path: string) {
 		throw new Error('Count not find last line of source map');
 	}
 	const sourceMapPath = match[1];
+	console.log('loading', sourceMapPath);
 	return fetchSimpleJson(sourceMapPath);
 }
+const cache = setupCache<string>();
 function loadMapCached(path: string) {
-	return withCache(path, async () => loadMap(path));
-}
-async function withCache<T>(key: string, func: () => Promise<T>): Promise<T> {
-	const cachedValue = cache.get(key);
-	if (cachedValue) {
-		return cachedValue;
-	}
-	const result = await func();
-	cachedValue.set(key, result);
-	return result;
+	return cache.withCache(path, loadMap);
 }
 
-async function getFetchResponseSimple(path: string) {
-	const response = await fetch(path);
-	if (!response.ok) {
-		throw new Error(`Fetch failed for path: ${path}`);
+function slice(text: string, line: number, column: number, opts: { context?: number }) {
+	const delimiter = '\n';
+	const before = opts.context || 0;
+	const after = opts.context || 0;
+	const lines = text.split(delimiter);
+	const begin = Math.max(0, line - before - 1);
+	const end = Math.min(line + after - 1, lines.length - 1);
+	const slice = lines.slice(begin, end + 1);
+	if (column > 100 || slice.some((s) => s.length > 300)) {
+		return [
+			lines[line - 1].slice(column - 1 - 30, column - 1 + 30),
+			'^'.padStart(32).replace('^', '<red>^</red>')
+		].join('\n');
 	}
-	return response;
-}
-async function fetchSimpleJson(path: string) {
-	const response = await getFetchResponseSimple(path);
-	return response.json();
-}
-async function fetchSimpleText(path: string) {
-	const response = await getFetchResponseSimple(path);
-	return response.text();
+	slice[line - begin - 1] = `<highlight>${slice[line - begin - 1]}</highlight>`;
+	slice.splice(line - begin, 0, '^'.padStart(column + 1).replace('^', '<red>^</red>'));
+	return slice.join(delimiter);
 }
