@@ -59,7 +59,8 @@ export function setupCache<T>() {
 		};
 	}
 	return {
-		withCache
+		withCache,
+		cache
 	};
 }
 const deferredPromise = <T>() => {

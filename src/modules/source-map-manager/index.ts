@@ -1,6 +1,14 @@
 import sourceMap, { type MappedPosition } from 'source-map';
 import { fetchSimpleJson, fetchSimpleText, setupCache } from './utils';
 
+export function isLocalConversionSupported(input: string): boolean {
+	const parts = getTraceParts(input);
+	return parts.every((part) => {
+		if (typeof part === 'string') return true;
+		return cache.cache.has(part.filename);
+	});
+}
+
 export async function convertText(
 	input: string
 ): Promise<{ text: string; srcMap: Record<string, string> }> {

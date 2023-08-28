@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { mapSourceMapHandler } from '../modules/api/map-source-map/client';
-	import { getTraceParts } from '../modules/source-map-manager';
+	import {
+		convertText,
+		getTraceParts,
+		isLocalConversionSupported
+	} from '../modules/source-map-manager';
 	import type { StackTracePath } from '../modules/source-map-manager';
 	import { sourcePartToHref } from './utils';
 	import { onMount, onDestroy } from 'svelte';
@@ -36,7 +40,9 @@
 		}
 		isParsing = true;
 		try {
-			const { text: newText, srcMap: newSrcMap } = await mapSourceMapHandler({ text });
+			const { text: newText, srcMap: newSrcMap } = await (isLocalConversionSupported(text)
+				? convertText(text)
+				: mapSourceMapHandler({ text }));
 			input = newText;
 			srcMap = newSrcMap;
 		} finally {
@@ -59,6 +65,7 @@
 				return;
 			}
 			const content = srcMap[key];
+			if (!content) return;
 			sourceContent = content.split(splitTaggedRegex).map((t) => {
 				const redMatch = matchRedRegex.exec(t);
 				if (redMatch) {
