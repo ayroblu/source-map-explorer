@@ -3,5 +3,6 @@
 </script>
 
 <h1>Source Map Explorer</h1>
-<p>The goal of this is to throw stack traces into this, and get reasonable explorable results</p>
+<p>Paste a stack trace by pressing ⌘v and get a source mapped version out</p>
+
 <SourceMapHandler />
