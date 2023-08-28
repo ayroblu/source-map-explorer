@@ -4,7 +4,7 @@
 /// <reference lib="webworker" />
 declare const self: ServiceWorkerGlobalScope;
 
-import { cleanupStaleAssets, handlePrecache, proxyFetch } from './main';
+import { cleanupStaleAssets, handleNavigationPreload, handlePrecache, proxyFetch } from './main';
 
 self.addEventListener('fetch', proxyFetch);
 
@@ -14,3 +14,9 @@ self.addEventListener('install', () => self.skipWaiting());
 // claim makes the new requests go to the new service worker
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
 self.addEventListener('activate', cleanupStaleAssets);
+
+/** Since our app is prerendered, we don't need navigation preload */
+const withNavigationPreload = false;
+if (withNavigationPreload) {
+	self.addEventListener('activate', handleNavigationPreload);
+}

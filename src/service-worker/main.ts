@@ -60,6 +60,18 @@ async function handleRemoveStaleAssets() {
 	await Promise.all(staleRequests.map((req) => cache.delete(req)));
 }
 
+export function handleNavigationPreload(event: ExtendableEvent) {
+	event.waitUntil(setNavigationPreload());
+}
+async function setNavigationPreload() {
+	if (self.registration.navigationPreload) {
+		await self.registration.navigationPreload.enable();
+		// How to use
+		// const response = await event.preloadResponse;
+		// if (response) return response;
+	}
+}
+
 // MARK: fetch
 export function proxyFetch(event: FetchEvent) {
 	const url = new URL(event.request.url);
