@@ -1,4 +1,10 @@
 import type { StackTracePath } from '../modules/source-map-manager';
+import { PUBLIC_SOURCE_URL_TEMPLATE } from '$env/static/public';
+
+const url = PUBLIC_SOURCE_URL_TEMPLATE;
+if (!url.includes('{filepath}') || !url.includes('{line}')) {
+	throw new Error('expected {filepath} and {line} template values in template url');
+}
 
 export function sourcePartToHref(part: StackTracePath) {
 	const { filename, line, column } = part;
@@ -8,7 +14,7 @@ export function sourcePartToHref(part: StackTracePath) {
 	}
 	const realFilename = filename.replace('webpack:///', '');
 	// https://sourcegraph.com/github.com/facebook/react/-/blob/packages/react/src/ReactChildren.js?L37
-	return `https://sourcegraph.com/github.com/facebook/react/-/blob/${realFilename}?L${line}`;
+	return url.replace('{filepath}', realFilename).replace('{line}', line);
 }
 
 const isNpm = true;

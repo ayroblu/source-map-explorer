@@ -131,7 +131,8 @@ async function loadMap(path: string) {
 	if (!match) {
 		throw new Error('Count not find last line of source map');
 	}
-	const sourceMapPath = match[1];
+	const sourceMapPath =
+		typeof window !== 'undefined' ? `/api/proxy?url=${encodeURIComponent(match[1])}` : match[1];
 	console.log('loading', sourceMapPath);
 	return fetchSimpleJson(sourceMapPath);
 }
