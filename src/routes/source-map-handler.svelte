@@ -6,6 +6,7 @@
 		isLocalConversionSupported
 	} from '../modules/source-map-manager';
 	import type { StackTracePath } from '../modules/source-map-manager';
+	import SourceContextContent from './source-context-content.svelte';
 	import { sourcePartToHref } from './utils';
 	import { onMount, onDestroy } from 'svelte';
 
@@ -52,9 +53,10 @@
 	$: parts = getTraceParts(input);
 	$: isLoading = isParsing;
 	let sourceContent: (string | { tag: 'highlight' | 'red'; text: string })[];
-	let sourceTop = '10px';
+	let sourceTop = 10;
 	let sourceLeft = '300px';
 	let sourceMaxWidth = '300px';
+	let originalElement: HTMLElement | undefined;
 	const getHandleMouseEnter =
 		({ filename, line, column }: StackTracePath) =>
 		(event: MouseEvent & { currentTarget: HTMLElement }) => {
@@ -77,15 +79,16 @@
 				}
 				return t;
 			});
-			sourceTop = `${window.scrollY + window.innerHeight / 2}px`;
+			sourceTop = window.scrollY + window.innerHeight / 2;
 			sourceLeft = `${window.scrollX + rect.right + 20}px`;
 			sourceMaxWidth = `${remainingWidth - 54}px`;
+			originalElement = event.currentTarget;
 		};
 	const splitTaggedRegex = /(<(?:red|highlight)>.+?<\/(?:red|highlight)>)/g;
 	const matchRedRegex = /<red>(.+)<\/red>/g;
 	const matchHighlightRegex = /<highlight>(.+)<\/highlight>/g;
 	$: contextContent = sourceContent;
-	$: top = sourceTop;
+	$: topPx = sourceTop;
 	$: left = sourceLeft;
 	$: maxWidth = sourceMaxWidth;
 </script>
@@ -93,21 +96,20 @@
 {#if isLoading}
 	<p>Loading...</p>
 {/if}
-{#if contextContent}
-	<div class="contextContent" style:top style:left style:max-width={maxWidth}>
-		{#each contextContent as part}{#if typeof part === 'string'}{part}{:else if part.tag === 'red'}<span
-					class="red">{part.text}</span
-				>{:else if part.tag === 'highlight'}<span class="highlight">{part.text}</span
-				>{:else}{part.text}{part.text}{/if}{/each}
-	</div>
-{/if}
 <section>
 	<pre>{#each parts as part}{#if typeof part === 'string'}{part}{:else}<a
 					target="_blank"
 					href={sourcePartToHref(part)}
-					on:mouseenter={getHandleMouseEnter(part)}>{part.filename}:{part.line}:{part.column}</a
+					on:mouseenter={getHandleMouseEnter(part)}
+					>{#if part.filename.includes('node_modules')}<span class="faded"
+							>{part.filename}:{part.line}:{part.column}</span
+						>{:else}{part.filename}:{part.line}:{part.column}{/if}</a
 				>{/if}{/each}</pre>
 </section>
+
+{#if contextContent}
+	<SourceContextContent {topPx} {left} {maxWidth} {contextContent} {originalElement} />
+{/if}
 
 <style>
 	a {
@@ -117,23 +119,7 @@
 		background: #5bf;
 		color: black;
 	}
-	.red {
-		color: red;
-	}
-	.highlight {
-		background: yellow;
-		color: black;
-	}
-	.contextContent {
-		position: absolute;
-		white-space: pre-wrap;
-		padding: 10px;
-		border-radius: 8px;
-		border: 1px solid #aaa;
-		background: black;
-		overflow: auto;
-		font-family: monospace;
-		max-height: calc(90vh - 22px);
-		transform: translateY(-50%);
+	.faded {
+		opacity: 0.7;
 	}
 </style>
