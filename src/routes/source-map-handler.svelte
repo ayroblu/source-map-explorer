@@ -31,22 +31,21 @@
 		}
 	});
 
-	let isParsing = true;
+	let isParsing = false
 	// 	let input = `Error: first
 	//   clone@webpack://home/src/ReactChildren.js:23:14
 	//   g@webpack://home/node_modules/react/src/render.js:241:24`;
 	let input = '';
 	let srcMap: Record<string, string> = {};
-	Promise.all([get('input'), get('srcMap')])
-		.then(([newInput, newSrcMap]) => {
-			if (newInput && newSrcMap) {
-				input = newInput;
-				srcMap = newSrcMap;
-			}
-		})
-		.finally(() => {
-			isParsing = false;
-		});
+	if (browser) {
+		Promise.all([get('input'), get('srcMap')])
+			.then(([newInput, newSrcMap]) => {
+				if (newInput && newSrcMap) {
+					input = newInput;
+					srcMap = newSrcMap;
+				}
+			});
+	}
 	async function handlePaste(event: ClipboardEvent) {
 		const text = event.clipboardData?.getData('Text');
 		if (!text) {
