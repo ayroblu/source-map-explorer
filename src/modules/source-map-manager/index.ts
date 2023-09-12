@@ -1,5 +1,6 @@
 import sourceMap, { type MappedPosition } from 'source-map';
-import { fetchSimpleJson, fetchSimpleText, setupCache } from './utils';
+import { fetchSimpleJson, fetchSimpleText, maybeAdjustFetchPath, setupCache } from './utils';
+import { browser } from '$app/environment';
 
 export function isLocalConversionSupported(input: string): boolean {
 	const parts = getTraceParts(input);
@@ -69,7 +70,7 @@ async function resolve(path: string, line: number, column: number): Promise<Reso
 	if (!path.startsWith('https:')) {
 		throw new Error(`resolve: "${path}" does not start with https`);
 	}
-	const map = await loadMapCached(path);
+	const map = await loadMapCached(maybeAdjustFetchPath(path));
 	return sourceMap.SourceMapConsumer.with(map, null, (smc) => {
 		const pos = smc.originalPositionFor({ line, column });
 		if (!pos.source || !pos.line || !pos.column) {
@@ -131,8 +132,7 @@ async function loadMap(path: string) {
 	if (!match) {
 		throw new Error('Count not find last line of source map');
 	}
-	const sourceMapPath =
-		typeof window !== 'undefined' ? `/api/proxy?url=${encodeURIComponent(match[1])}` : match[1];
+	const sourceMapPath = browser ? `/api/proxy?url=${encodeURIComponent(match[1])}` : match[1];
 	console.log('loading', sourceMapPath);
 	return fetchSimpleJson(sourceMapPath);
 }

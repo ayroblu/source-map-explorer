@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { mapSourceMapHandler } from '../modules/api/map-source-map/client';
 	import {
 		convertText,
@@ -10,7 +11,7 @@
 	import { sourcePartToHref } from './utils';
 	import { onMount, onDestroy } from 'svelte';
 
-	/* if (typeof window !== 'undefined') { */
+	/* if (browser) { */
 	/* 	console.log('setup controller change'); */
 	/* 	navigator.serviceWorker.addEventListener( */
 	/* 		'controllerchange', */
@@ -24,7 +25,7 @@
 		window.addEventListener('paste', handlePaste);
 	});
 	onDestroy(() => {
-		if (typeof window !== 'undefined') {
+		if (browser) {
 			window.removeEventListener('paste', handlePaste);
 		}
 	});

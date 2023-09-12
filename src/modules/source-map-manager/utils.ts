@@ -1,6 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-empty-function */
 
+import { PUBLIC_CONVERT_URL_AFTER, PUBLIC_CONVERT_URL_BEFORE } from '$env/static/public';
+
+export function maybeAdjustFetchPath(path: string) {
+	if (PUBLIC_CONVERT_URL_BEFORE) {
+		return path.replace(PUBLIC_CONVERT_URL_BEFORE, PUBLIC_CONVERT_URL_AFTER);
+	}
+	return path;
+}
+
 export function setupCache<T>() {
 	const cacheWaiting = new Map<
 		string,
