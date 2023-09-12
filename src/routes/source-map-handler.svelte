@@ -40,7 +40,9 @@
 		}
 		isParsing = true;
 		try {
-			const { text: newText, srcMap: newSrcMap } = await convertText(text)
+			const { text: newText, srcMap: newSrcMap } = await (isLocalConversionSupported(text)
+				? convertText(text)
+				: mapSourceMapHandler({ text }));
 			input = newText;
 			srcMap = newSrcMap;
 		} finally {
