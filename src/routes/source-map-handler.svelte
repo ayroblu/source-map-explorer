@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { mapSourceMapHandler } from '../modules/api/map-source-map/client';
+	import { get, set } from 'idb-keyval';
 	import {
 		convertText,
 		getTraceParts,
@@ -30,11 +31,22 @@
 		}
 	});
 
-	let isParsing = false;
-	let input = `Error: first
-  clone@webpack://home/src/ReactChildren.js:23:14
-  g@webpack://home/node_modules/react/src/render.js:241:24`;
+	let isParsing = true;
+	// 	let input = `Error: first
+	//   clone@webpack://home/src/ReactChildren.js:23:14
+	//   g@webpack://home/node_modules/react/src/render.js:241:24`;
+	let input = '';
 	let srcMap: Record<string, string> = {};
+	Promise.all([get('input'), get('srcMap')])
+		.then(([newInput, newSrcMap]) => {
+			if (newInput && newSrcMap) {
+				input = newInput;
+				srcMap = newSrcMap;
+			}
+		})
+		.finally(() => {
+			isParsing = false;
+		});
 	async function handlePaste(event: ClipboardEvent) {
 		const text = event.clipboardData?.getData('Text');
 		if (!text) {
@@ -47,6 +59,8 @@
 				: mapSourceMapHandler({ text }));
 			input = newText;
 			srcMap = newSrcMap;
+			set('input', input);
+			set('srcMap', srcMap);
 		} finally {
 			isParsing = false;
 		}
