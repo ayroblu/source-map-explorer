@@ -100,7 +100,7 @@ async function handlePrefetch(event: FetchEvent, url: string = event.request.url
 	return res;
 }
 
-const debug = true;
+const debug = false;
 function log(...args: unknown[]) {
 	if (debug) {
 		console.log(...args);

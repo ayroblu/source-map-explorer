@@ -18,18 +18,21 @@ export async function convertText(
 	const modifiedParts = await Promise.all(
 		parts.map(async (part) => {
 			if (typeof part === 'string') return part;
-			const { filename, line, column } = part;
+			const { name, filename, line, column } = part;
 			const result = await safeResolve(filename, parseInt(line, 10), parseInt(column, 10));
 			if (!result.success) {
 				console.error('failed to resolve', filename, line, column, result.error);
 				return `${filename}:${line}:${column}`;
 			}
 			const { pos, src } = result.data;
-			const { line: newLine, column: newColumn, source } = pos;
+			const { name: newName, line: newLine, column: newColumn, source } = pos;
 			const newFilename = source;
 			const newTrace = `${newFilename}:${newLine}:${newColumn}`;
 			if (!srcMap[newTrace]) {
 				srcMap[newTrace] = src;
+			}
+			if (name || newName) {
+				return `at ${newName ?? name} (${newTrace})`;
 			}
 			return newTrace;
 		})
@@ -44,6 +47,9 @@ export type StackTracePath = {
 	filename: string;
 	line: string;
 	column: string;
+	name: string | undefined;
+	prefix: string | undefined;
+	suffix: string | undefined;
 };
 export function getTraceParts(input: string): (string | StackTracePath)[] {
 	return input.split(sourceRegex).map((text) => {
@@ -52,15 +58,18 @@ export function getTraceParts(input: string): (string | StackTracePath)[] {
 			return text;
 		}
 		return {
-			filename: match[1],
-			line: match[2],
-			column: match[3]
+			prefix: match[1],
+			name: match[2],
+			filename: match[3],
+			line: match[4],
+			column: match[5],
+			suffix: match[6]
 		};
 	});
 }
 
-const sourceRegex = /([\w]+:\/\/[\S]+:\d+:\d+)/g;
-const sourcePartsRegex = /([\S]+):(\d+):(\d+)/;
+const sourceRegex = /((?:at [\w (]+)?[\w]+:\/\/[\S]+:\d+:\d+\)?)/g;
+const sourcePartsRegex = /(at (\w+) \(|at )?([\S]+):(\d+):(\d+)(\))?/;
 
 type ResolveReturn = {
 	pos: MappedPosition;
